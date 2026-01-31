@@ -1,0 +1,113 @@
+import numpy as np
+from sklearn.datasets import load_iris
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+from sklearn.datasets import make_blobs
+# Load Iris dataset
+iris = load_iris()
+X = iris.data          # shape (150, 4)
+y_true = iris.target   # true class labels (for analysis only)
+def euclidean_distance(X, centroids):
+    # X: (n_samples, n_features)
+    # centroids: (k, n_features)
+    return np.sqrt(((X[:, np.newaxis] - centroids) ** 2).sum(axis=2))
+class KMeans:
+    def __init__(self, k=3, max_iters=100, tol=1e-4, random_state=42):
+        self.k = k
+        self.max_iters = max_iters
+        self.tol = tol
+        self.random_state = random_state
+
+    def fit(self, X):
+        np.random.seed(self.random_state)
+        n_samples = X.shape[0]
+
+        # Random centroid initialization
+        random_indices = np.random.choice(n_samples, self.k, replace=False)
+        self.centroids = X[random_indices]
+
+        for _ in range(self.max_iters):
+            # Assignment step
+            distances = euclidean_distance(X, self.centroids)
+            self.labels = np.argmin(distances, axis=1)
+
+            # Save old centroids
+            old_centroids = self.centroids.copy()
+
+            # Update step
+            self.centroids = np.array([
+                X[self.labels == i].mean(axis=0)
+                for i in range(self.k)
+            ])
+
+            # Convergence check
+            if np.linalg.norm(self.centroids - old_centroids) < self.tol:
+                break
+
+    def predict(self, X):
+        distances = euclidean_distance(X, self.centroids)
+        return np.argmin(distances, axis=1)
+
+def inertia(X, centroids, labels):
+    total = 0
+    for i in range(len(X)):
+        total += np.sum((X[i] - centroids[labels[i]]) ** 2)
+    return total
+def silhouette_score(X, labels):
+    n = X.shape[0]
+    unique_labels = np.unique(labels)
+    distances = euclidean_distance(X, X)
+
+    silhouette_vals = []
+
+    for i in range(n):
+        same_cluster = labels == labels[i]
+        other_clusters = labels != labels[i]
+
+        # a(i): mean intra-cluster distance
+        a = np.mean(distances[i][same_cluster]) if np.sum(same_cluster) > 1 else 0
+
+        # b(i): smallest mean distance to other clusters
+        b = np.min([
+            np.mean(distances[i][labels == label])
+            for label in unique_labels if label != labels[i]
+        ])
+
+        silhouette_vals.append((b - a) / max(a, b))
+
+    return np.mean(silhouette_vals)
+Ks = range(2, 8)
+inertias = []
+silhouettes = []
+
+for k in Ks:
+    model = KMeans(k=k)
+    model.fit(X)
+
+    inertias.append(inertia(X, model.centroids, model.labels))
+    silhouettes.append(silhouette_score(X, model.labels))
+plt.figure(figsize=(12, 4))
+
+plt.subplot(1, 2, 1)
+plt.plot(Ks, inertias, marker='o')
+plt.xlabel("Number of Clusters (K)")
+plt.ylabel("Inertia")
+plt.title("Elbow Method")
+
+plt.subplot(1, 2, 2)
+plt.plot(Ks, silhouettes, marker='o')
+plt.xlabel("Number of Clusters (K)")
+plt.ylabel("Silhouette Score")
+plt.title("Silhouette Analysis")
+
+plt.show()
+kmeans = KMeans(k=3)
+kmeans.fit(X)
+labels = kmeans.labels
+
+final_silhouette = silhouette_score(X, labels)
+final_inertia = inertia(X, kmeans.centroids, labels)
+
+print("Final Silhouette Score:", final_silhouette)
+print("Final Inertia:", final_inertia)
